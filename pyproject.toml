@@ -1,0 +1,25 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastapi-users-auth"
+version = "0.0.2"
+description = "A FastAPI library for user authentication and management"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Fabian Aichele", email = "aichele@zykl.io" }]
+keywords = ["fastapi", "library", "domain"]
+dependencies = [
+    "pydantic>=2.7,<3",
+]
+optional-dependencies = { dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "twine"] }
+[project.urls]
+Homepage = "https://github.com/faichele/fastapi_users_auth"
+Repository = "https://github.com/faichele/fastapi_users_auth.git"
+
+[tool.setuptools]
+packages = ["fastapi_users_auth"]
+package-dir = {"fastapi_users_auth" = "."}
