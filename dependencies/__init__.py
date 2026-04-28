@@ -18,6 +18,9 @@ from .auth_provider import (
     get_current_superuser_dependency,
 )
 
+from .web_auth_deps import auth_or_redirect, get_mandatory_current_user, get_optional_current_user
+
+
 __all__ = [
     "AuthDependencies",
     "create_auth_dependencies",
@@ -30,4 +33,7 @@ __all__ = [
     "get_current_active_user_dependency",
     "get_current_user_dependency",
     "get_current_superuser_dependency",
+    "auth_or_redirect",
+    "get_optional_current_user",
+    "get_mandatory_current_user"
 ]

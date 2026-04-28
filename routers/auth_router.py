@@ -11,8 +11,10 @@ Dieser Router behandelt alle authentifizierungsbezogenen Endpunkte:
 from datetime import timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
+
+from fastapi_logging_manager import logger_manager
 
 from ..models.auth_models import Token, TokenData, NewPassword, NewPasswordRequest, Message, LoginResponse
 from ..models.user_models import UserRegister, UserPublic
@@ -22,6 +24,9 @@ from ..dependencies.auth_deps import (
     get_current_user as get_current_user_provider,
     get_current_active_user as get_current_active_user_provider,
 )
+
+# Set up logger instance
+logger = logger_manager.get_logger(name="auth_router", to_file=True)
 
 
 class AuthRouter:
@@ -56,22 +61,59 @@ class AuthRouter:
 
         @self.router.post("/login", response_model=TokenData)
         def login(
-            form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+            response: Response,
+            form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         ) -> TokenData:
             """
             OAuth2-kompatible Token-Anmeldung.
 
             Authentifiziert einen Benutzer mit E-Mail und Passwort
             und gibt einen JWT-Access-Token zurück.
+
+            Zusätzlich wird (für serverseitig gerenderte HTML-Seiten) ein HttpOnly-Cookie
+            `access_token` gesetzt.
             """
+            logger.info(f"Login request with credentials: {form_data.username}, {'*' * len(form_data.password)}")
             credentials = {"email": form_data.username, "password": form_data.password}
             token_data = self.auth_service.login(credentials)
             if not token_data:
+                logger.warning(f"Login failed for user {form_data.username}")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect email or password",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+
+            # TODO: Remove for production!
+            logger.info(
+                f"Login successful for user {form_data.username}. Token: {'*' * len(token_data.access_token)}"
+            )
+
+            # Cookie-only Flow für HTML-Seiten:
+            # - HttpOnly: nicht per JS lesbar
+            # - SameSite=Lax: normale Navigation/Redirects funktionieren
+            # - Secure: nur in prod (wenn HTTPS). Hier konservativ: abhängig von ENV.
+            max_age = int(token_data.expires_in) if getattr(token_data, "expires_in", None) else None
+
+            try:
+                # Optional: settings-Import klappt nur, wenn das Backend-Modul im gleichen Runtime-Env verfügbar ist.
+                from backend.app.config import settings  # type: ignore
+                env = getattr(settings, "ENVIRONMENT", "local")
+            except Exception:
+                env = "local"
+
+            secure_cookie = env not in {"local", "development"}
+
+            response.set_cookie(
+                key="access_token",
+                value=token_data.access_token,
+                httponly=True,
+                samesite="lax",
+                secure=secure_cookie,
+                path="/",
+                max_age=max_age,
+            )
+
             return token_data
 
         @self.router.post("/login/test-token", response_model=UserPublic)
@@ -83,6 +125,7 @@ class AuthRouter:
 
             Gibt die Benutzerinformationen für einen gültigen Token zurück.
             """
+            logger.info(f"Test token request for user {current_user.email}")
             return current_user
 
         @self.router.post("/register", response_model=UserPublic)
@@ -92,6 +135,7 @@ class AuthRouter:
 
             Erstellt ein neues Benutzerkonto mit den angegebenen Daten.
             """
+            logger.info(f"Register request for user {user_register.email}")
             try:
                 user = self.auth_service.register_user(user_register)
                 return UserPublic.model_validate(user)
@@ -109,6 +153,7 @@ class AuthRouter:
             Sendet eine E-Mail mit einem Reset-Link an die angegebene Adresse,
             falls ein Konto mit dieser E-Mail existiert.
             """
+            logger.info(f"Password reset requested for user {reset_request.email}")
             reset_token = self.auth_service.create_password_reset_token(reset_request.email)
 
             if reset_token:
@@ -128,14 +173,17 @@ class AuthRouter:
 
             Setzt das Passwort für einen Benutzer anhand eines gültigen Reset-Tokens zurück.
             """
+            logger.info(f"Password reset confirmed for user {reset_data.email}")
             success = self.auth_service.reset_password(reset_data.token, reset_data.new_password)
 
             if not success:
+                logger.warning(f"Password reset failed for user {reset_data.email}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Invalid or expired reset token"
                 )
 
+            logger.info(f"Password reset successful for user {reset_data.email}")
             return Message(message="Passwort erfolgreich zurückgesetzt")
 
         @self.router.post("/refresh", response_model=Token)
@@ -151,14 +199,19 @@ class AuthRouter:
             Returns:
                 Neuer Access-Token (+ optional neues Refresh-Token)
             """
+            logger.info(f"Refresh token request for user with token {refresh_token[:5]}...")
             token_data = self.auth_service.refresh_token(refresh_token)
             if not token_data:
+                logger.warning(f"Refresh token failed for user with token {refresh_token[:5]}")
+
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid refresh token"
                 )
 
             # TokenData -> Token mappen (Token ist die schlanke Response)
+            logger.info(f"Refresh token successful for user with token {refresh_token[:5]}")
+
             return Token(
                 access_token=token_data.access_token,
                 token_type=token_data.token_type,
@@ -168,6 +221,7 @@ class AuthRouter:
 
         @self.router.post("/logout", response_model=Message)
         def logout(
+            response: Response,
             current_user: Annotated[Any, Depends(self.get_current_active_user_dep)],
             token: Annotated[str, Depends(self.auth_deps.get_token)]
         ) -> Message:
@@ -176,9 +230,14 @@ class AuthRouter:
 
             Widerruft den aktuellen Access-Token (in einer vollständigen
             Implementierung würde der Token zur Blacklist hinzugefügt).
+
+            Zusätzlich wird das `access_token` Cookie gelöscht.
             """
+            logger.info(f"Logout request for user {current_user.email}")
+
             success = self.auth_service.revoke_token(token)
             if success:
+                response.delete_cookie(key="access_token", path="/")
                 return Message(message="Successfully logged out")
             else:
                 raise HTTPException(
@@ -196,6 +255,9 @@ class AuthRouter:
             Returns:
                 Öffentliche Benutzerinformationen
             """
+
+            logger.info(f"Me request for user {current_user.email}")
+
             return current_user
 
         @self.router.get("/permissions")
@@ -208,6 +270,8 @@ class AuthRouter:
             Returns:
                 Dictionary mit Benutzerinformationen und Berechtigungen
             """
+            logger.info(f"Permissions request for user {current_user.email}")
+
             permissions = self.auth_service.get_user_permissions(current_user)
             return {
                 "user_id": str(current_user.id),
@@ -234,5 +298,7 @@ def create_auth_router(
     Returns:
         Konfigurierter APIRouter
     """
+    logger.info(f"Creating auth router with prefix {prefix}")
+
     auth_router = AuthRouter(auth_service, auth_deps, prefix)
     return auth_router.router

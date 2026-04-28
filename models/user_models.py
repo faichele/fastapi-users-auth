@@ -11,35 +11,13 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-import uuid
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
-
-from shared_orm import Base
-
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
-# SQLAlchemy model for user accounts
-class User(Base):
-    __tablename__ = "users"
+from shared_orm import Base
+from ..model_factory import create_auth_models
 
-    # Falls das Modul in seltenen Fällen doppelt importiert wird (z.B. durch dynamische Imports),
-    # verhindert dies einen Crash. Besser ist: Importpfade konsolidieren.
-    # TODO: Required?
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4()))
-    email = Column(String(255), unique=True, nullable=False, index=True)
-
-    hashed_password = Column(String(255), nullable=False)
-
-    is_active = Column(Boolean, default=True, nullable=False)
-    is_superuser = Column(Boolean, default=False, nullable=False)
-
-    full_name = Column(String(255), nullable=True)
-
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
-    last_login = Column(DateTime(timezone=True), nullable=True)
+_DEFAULT_AUTH_MODELS = create_auth_models(Base)
+User = _DEFAULT_AUTH_MODELS.User
 
 
 # Pydantic Base Models
