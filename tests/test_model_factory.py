@@ -8,7 +8,7 @@ packages_root = repo_root / "packages"
 sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(packages_root))
 
-from shared_orm import Base as SharedBase
+from fastapi_shared_orm import Base as SharedBase
 from fastapi_users_auth import configure_auth_models, create_auth_models
 from fastapi_users_auth.models import group_models, user_models
 

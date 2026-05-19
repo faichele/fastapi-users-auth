@@ -13,7 +13,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
-from shared_orm import Base
+from fastapi_shared_orm import Base
 from ..model_factory import create_auth_models
 
 _DEFAULT_AUTH_MODELS = create_auth_models(Base)
