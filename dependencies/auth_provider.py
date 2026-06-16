@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import HTTPException
 
 from .auth_deps import AuthDependencies, get_current_user, get_current_active_user, get_current_active_superuser
-from backend.utils.logger import logger_manager
+from fastapi_logging_manager import logger_manager
 
 # Logger für dieses Modul
 logger = logger_manager.get_logger(name="auth_provider", to_file=True)
