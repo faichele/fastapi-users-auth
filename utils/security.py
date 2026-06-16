@@ -2,8 +2,8 @@
 Sicherheits-Utilities für Passwort-Hashing und -Verifikation.
 
 Diese Klasse kapselt alle sicherheitsrelevanten Funktionen:
-- Passwort-Hashing mit Argon2
-- Passwort-Verifikation
+- Passwort-Hashing mit argon2id
+- Passwort-Verifikation für argon2id und bcrypt
 - Sichere Passwort-Generierung
 """
 
@@ -18,7 +18,7 @@ class SecurityUtils:
     """
     Utility-Klasse für alle sicherheitsrelevanten Operationen.
 
-    Verwendet Argon2 für sicheres Passwort-Hashing und stellt
+    Verwendet argon2id für neue Hashes und akzeptiert bcrypt als Legacy-Format.
     Methoden für Passwort-Verifikation und -Generierung bereit.
     """
 
@@ -27,11 +27,11 @@ class SecurityUtils:
         Initialisiert die SecurityUtils mit konfigurierbaren Hashing-Schemes.
 
         Args:
-            schemes: Liste der zu verwendenden Hashing-Schemes (Standard: ["argon2"])
+            schemes: Liste der zu verwendenden Hashing-Schemes (Standard: ["argon2", "bcrypt"])
             deprecated: Behandlung veralteter Schemes (Standard: "auto")
         """
         if schemes is None:
-            schemes = ["argon2"]
+            schemes = ["argon2", "bcrypt"]
 
         self.pwd_context = CryptContext(schemes=schemes, deprecated=deprecated)
 

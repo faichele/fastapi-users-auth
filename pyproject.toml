@@ -15,7 +15,9 @@ keywords = ["fastapi", "library", "domain"]
 dependencies = [
     "pydantic>=2.7,<3",
     "sqlalchemy>=2,<3",
-    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager@HEAD"
+    "passlib[bcrypt,argon2]>=1.7.4",
+    "argon2-cffi>=23,<24",
+    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager"
 ]
 optional-dependencies = { dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "twine"] }
 [project.urls]

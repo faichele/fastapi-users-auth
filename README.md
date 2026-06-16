@@ -169,7 +169,7 @@ def some_business_logic(db_session, config):
 
 ## Sicherheitsfeatures
 
-- **Passwort-Hashing**: bcrypt mit konfigurierbaren Rounds
+- **Passwort-Hashing**: argon2id für neue Hashes, bcrypt für Legacy-Hashes
 - **JWT-Token**: HS256-Signierung mit konfigurierbarem Secret
 - **Token-Verifikation**: Automatische Signatur- und Ablaufprüfung
 - **Berechtigungssystem**: Rollen-basierte Zugriffskontrolle
@@ -216,7 +216,7 @@ Das Modul ist für Erweiterungen konzipiert:
 - SQLAlchemy
 - Pydantic
 - python-jose[cryptography] (für JWT)
-- passlib[bcrypt] (für Passwort-Hashing)
+- passlib[bcrypt,argon2] (für Passwort-Hashing)
 - python-multipart (für OAuth2-Forms)
 
 ## Beispiel-Integration in Rideto

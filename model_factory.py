@@ -229,7 +229,7 @@ def create_auth_models(
     # -----------------------------------------------------------------------
     # UserSession – anwendungsunabhängiges Session-Modell
     #
-    # FK: user_id → users.id  (String UUID, der PK des User-Modells)
+    # FK: user_uuid → users.uuid  (String UUID, Legacy-Feld aus dem Mixin)
     # login_source: Plain String(16); der Wert wird von der Anwendung gesetzt
     #               (z. B. "backend", "frontend", "unknown").
     # -----------------------------------------------------------------------
@@ -237,9 +237,9 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": session_table_name,
         "id": Column(Integer, primary_key=True, index=True, autoincrement=True),
-        "user_id": Column(
+        "user_uuid": Column(
             String(36),
-            ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"),
+            ForeignKey(f"{user_table_name}.uuid", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),

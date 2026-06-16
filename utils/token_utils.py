@@ -16,7 +16,7 @@ from uuid import UUID
 import jwt
 from pydantic import ValidationError
 
-from ..models.auth_models import TokenPayload, TokenPayloadData
+from fastapi_users_auth.models.auth_models import TokenPayload, TokenPayloadData
 
 
 class TokenUtils:

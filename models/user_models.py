@@ -5,6 +5,20 @@ Diese Modelle definieren die Datenstrukturen für Benutzer in verschiedenen Kont
 - Datenbank-Entitäten (SQLAlchemy)
 - API-Request/Response-Modelle (Pydantic)
 - Interne Datenübertragung
+
+Hinweis zu SQLAlchemy-Modellen (User, UserSession, …):
+  Die SQLAlchemy-ORM-Klassen werden NICHT statisch hier definiert. Sie werden
+  dynamisch durch :func:`~fastapi_users_auth.model_factory.configure_auth_models`
+  in dieses Modul eingebunden. Nach dem Aufruf von ``configure_auth_models`` sind
+  folgende Attribute verfügbar:
+    - ``fastapi_users_auth.User``
+    - ``fastapi_users_auth.UserSession``
+    - ``fastapi_users_auth.Group``
+    - ``fastapi_users_auth.UserGroupMembership``
+  In Anwendungen wird empfohlen, diese Klassen über das ``database``-Package zu
+  importieren (z. B. ``from database import UserSession``), da dort der Aufruf
+  von ``configure_auth_models`` mit dem korrekten Präfix und den Anwendungs-Mixins
+  garantiert ist.
 """
 
 from datetime import datetime, timezone
@@ -13,14 +27,16 @@ from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
-from fastapi_shared_orm import Base
-from ..model_factory import create_auth_models
+# SQLAlchemy-ORM-Modelle werden per configure_auth_models in dieses Modul
+# gepacht – Platzhalter damit Import-Prüftools (mypy, IDE) nicht warnen.
+User: type = None  # type: ignore[assignment]
+UserSession: type = None  # type: ignore[assignment]
 
-_DEFAULT_AUTH_MODELS = create_auth_models(Base)
-User = _DEFAULT_AUTH_MODELS.User
 
-
+# ---------------------------------------------------------------------------
 # Pydantic Base Models
+# ---------------------------------------------------------------------------
+
 class UserBase(BaseModel):
     """Basis-Pydantic-Modell für Benutzer."""
 
@@ -102,3 +118,5 @@ class UsersPublic(BaseModel):
 
     data: list[UserPublic] = Field(..., description="Liste der Benutzer")
     count: int = Field(..., description="Anzahl der Benutzer")
+
+

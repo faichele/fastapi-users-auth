@@ -36,12 +36,13 @@ class TokenData(BaseModel):
 
 
 class TokenPayload(BaseModel):
-    """Pydantic-Modell für JWT-Token-Payload."""
+    """Pydantic-Modell für JWT-Token-Payload (Standard-Claims nach RFC 7519)."""
 
     sub: Optional[str] = Field(None, description="Subject (Benutzer-ID)")
     exp: Optional[datetime] = Field(None, description="Ablaufzeit")
     iat: Optional[datetime] = Field(None, description="Ausstellungszeit")
     iss: Optional[str] = Field(None, description="Aussteller")
+    jti: Optional[str] = Field(None, description="JWT-ID (eindeutige Token-Kennung)")
 
 
 class TokenPayloadData(BaseModel):

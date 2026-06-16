@@ -6,18 +6,27 @@ Dieses Modul ergänzt das Auth-Paket um:
 - Pydantic-Modelle für API-Request/Response-Schemas
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from fastapi_shared_orm import Base
-from ..model_factory import create_auth_models
+from ..model_factory import create_auth_models  # noqa: F401 – re-exported for convenience
 
-_DEFAULT_AUTH_MODELS = create_auth_models(Base)
-Group = _DEFAULT_AUTH_MODELS.Group
-UserGroupMembership = _DEFAULT_AUTH_MODELS.UserGroupMembership
+# WICHTIG: Kein eagerer `create_auth_models(Base)`-Aufruf mehr hier!
+# Ein früherer Aufruf `create_auth_models(Base)` beim Modulimport registrierte
+# Tabellen ohne Präfix (users, groups, user_sessions, user_group_memberships) in
+# Base.metadata der gemeinsamen fastapi_shared_orm.Base.  Wenn die Anwendung
+# danach configure_auth_models(..., table_prefix="heitec_approver_") aufruft,
+# landen BEIDE Tabellensets in der Metadata und create_all_tables legt beide an –
+# also redundante Tabellen mit unterschiedlichen Präfixen.
+#
+# Die Platzhalter Group und UserGroupMembership werden durch den ersten Aufruf von
+# configure_auth_models() im Anwendungs-Startup (database/__init__.py) automatisch
+# via _patch_module() auf die korrekt-präfixierten Klassen gesetzt.
+Group = None  # type: ignore[assignment]  – wird durch configure_auth_models() ersetzt
+UserGroupMembership = None  # type: ignore[assignment]  – wird durch configure_auth_models() ersetzt
 
 
 class GroupBase(BaseModel):
