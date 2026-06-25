@@ -12,7 +12,7 @@ It includes:
 from typing import Annotated, Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from ..models.user_models import User
@@ -49,27 +49,38 @@ class AuthDependencies:
 
     def get_token(
         self,
-        credentials: Annotated[HTTPAuthorizationCredentials, Depends(HTTPBearer())]
+        request: Request,
+        credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(HTTPBearer(auto_error=False))]
     ) -> str:
         """
-        Extracts a token from the HTTP Authorization header.
+        Extracts a token from Authorization header or `access_token` cookie.
 
         Args:
-            credentials: HTTP Bearer Credentials
+            request: FastAPI request (for cookie fallback)
+            credentials: Optional HTTP Bearer Credentials
 
         Returns:
             The extracted token
 
         Raises:
-            HTTPException: When no valid token is found in the header
+            HTTPException: When no valid token is found
         """
-        if not credentials or credentials.scheme.lower() != "bearer":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        return credentials.credentials
+        if credentials and credentials.scheme.lower() == "bearer":
+            return credentials.credentials
+
+        cookie_token = request.cookies.get("access_token")
+        if cookie_token:
+            token = cookie_token.strip()
+            if token.lower().startswith("bearer "):
+                token = token[7:].strip()
+            if token:
+                return token
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     def get_user_by_id(self, user_id: UUID) -> User:
         """

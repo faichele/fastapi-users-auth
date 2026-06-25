@@ -15,7 +15,9 @@ from .user_models import (
     UserLogin,
     UsersPublic,
     UpdatePassword,
-    UserUpdateMe
+    UserUpdateMe,
+    UserRole,
+    Language
 )
 
 from .group_models import (
@@ -44,7 +46,11 @@ from .auth_models import (
     NewPasswordRequest,
     Message,
     PasswordResetToken,
-    LoginResponse
+    LoginResponse,
+    TwoFactorAuthSecret,
+    TwoFactorAuthentication,
+    TwoFactorAuthVerificationCode,
+    UserAlert
 )
 
 __all__ = [
@@ -65,6 +71,8 @@ __all__ = [
     "UsersPublic",
     "UpdatePassword",
     "UserUpdateMe",
+    "UserRole",
+    "Language"
 
     # Group Models
     "Group",
@@ -92,4 +100,8 @@ __all__ = [
     "Message",
     "PasswordResetToken",
     "LoginResponse",
+    "TwoFactorAuthSecret",
+    "TwoFactorAuthentication",
+    "TwoFactorAuthVerificationCode",
+    "UserAlert"
 ]

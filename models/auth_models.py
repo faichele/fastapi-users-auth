@@ -6,12 +6,23 @@ Diese Modelle definieren die Datenstrukturen für:
 - Passwort-Reset-Funktionalität
 - API-Nachrichten und Antworten
 """
+import enum
 
 from datetime import datetime
 from typing import Optional, Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+
+
+class IdentityProvider(str, enum.Enum):
+    Integrated = "Integrated"
+
+
+class TwoFactorAuthentication(str, enum.Enum):
+    Off = "Off"
+    HOTP = "HOTP"
+    TOTP = "TOTP"
 
 
 class Token(BaseModel):
@@ -33,6 +44,10 @@ class TokenData(BaseModel):
     user_id: UUID = Field(..., description="Benutzer-ID")
     email: str = Field(..., description="E-Mail-Adresse des Benutzers")
     is_superuser: bool = Field(False, description="Superuser-Status")
+    requires_2fa: bool = Field(False, description="Zwei-Faktor-Authentifizierung erforderlich")
+    requires_2fa_registration: bool = Field(False,
+                                            description="Registrierung mit Zwei-Faktor-Authentifizierung erforderlich")
+    requires_password_update: bool = Field(False, description="Passwort-Update erforderlich")
 
 
 class TokenPayload(BaseModel):
@@ -77,6 +92,11 @@ class Message(BaseModel):
     data: Optional[Any] = Field(None, description="Zusätzliche Daten")
 
 
+class UserAlert(BaseModel):
+    password_expires_in: Optional[int] = None
+    license_expires_in: Optional[int] = None
+
+
 class PasswordResetToken(BaseModel):
     """Pydantic-Modell für Passwort-Reset-Token."""
 
@@ -93,3 +113,14 @@ class LoginResponse(BaseModel):
     expires_in: int = Field(..., description="Token-Gültigkeitsdauer in Sekunden")
     user: dict = Field(..., description="Benutzerinformationen")
     message: str = Field(default="Login erfolgreich", description="Erfolgs-Nachricht")
+
+
+class TwoFactorAuthSecret(BaseModel):
+    secret: str
+    uri: str
+    type: TwoFactorAuthentication
+
+
+class TwoFactorAuthVerificationCode(BaseModel):
+    otp: str
+

@@ -36,6 +36,21 @@ class DatabaseUserService(BaseUserService):
         self.db = db_session
         self.security = SecurityUtils()
 
+    def _normalize_user_id(self, user_id: UUID | str) -> UUID | str:
+        """Normalize user IDs to the SQL type of User.id (UUID or String)."""
+        try:
+            id_python_type = User.id.type.python_type
+        except Exception:
+            id_python_type = str
+
+        if id_python_type is str:
+            return str(user_id)
+
+        if id_python_type is UUID and isinstance(user_id, str):
+            return UUID(user_id)
+
+        return user_id
+
     def get_user_by_id(self, user_id: UUID) -> Optional[User]:
         """
         Holt einen Benutzer anhand seiner ID.
@@ -46,7 +61,8 @@ class DatabaseUserService(BaseUserService):
         Returns:
             User-Objekt wenn gefunden, None andernfalls
         """
-        return self.db.query(User).filter(User.id == user_id).first()
+        normalized_user_id = self._normalize_user_id(user_id)
+        return self.db.query(User).filter(User.id == normalized_user_id).first()
 
     def get_user_by_email(self, email: str) -> Optional[User]:
         """

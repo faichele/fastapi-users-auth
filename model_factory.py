@@ -126,11 +126,15 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": user_table_name,
         "id": Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4())),
+        # "uuid": Column(String(36), primary_key=False, index=False, default=lambda: str(uuid.uuid4())),
         "email": Column(String(255), unique=True, nullable=False, index=True),
         "hashed_password": Column(String(255), nullable=False),
         "is_active": Column(Boolean, default=True, nullable=False),
         "is_superuser": Column(Boolean, default=False, nullable=False),
         "full_name": Column(String(255), nullable=True),
+        "department": Column(String(255), nullable=True),
+        "language": Column(String(10), nullable=False, default="de"),
+        "two_fa_enabled": Column(Boolean, default=False, nullable=False),
         "created_at": Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False),
         "updated_at": Column(
             DateTime(timezone=True),
@@ -229,7 +233,7 @@ def create_auth_models(
     # -----------------------------------------------------------------------
     # UserSession – anwendungsunabhängiges Session-Modell
     #
-    # FK: user_uuid → users.uuid  (String UUID, Legacy-Feld aus dem Mixin)
+    # FK: user_id → users.id
     # login_source: Plain String(16); der Wert wird von der Anwendung gesetzt
     #               (z. B. "backend", "frontend", "unknown").
     # -----------------------------------------------------------------------
@@ -237,9 +241,9 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": session_table_name,
         "id": Column(Integer, primary_key=True, index=True, autoincrement=True),
-        "user_uuid": Column(
+        "user_id": Column(
             String(36),
-            ForeignKey(f"{user_table_name}.uuid", ondelete="CASCADE"),
+            ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),

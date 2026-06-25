@@ -20,12 +20,13 @@ Hinweis zu SQLAlchemy-Modellen (User, UserSession, …):
   von ``configure_auth_models`` mit dem korrekten Präfix und den Anwendungs-Mixins
   garantiert ist.
 """
+import enum
 
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 
 # SQLAlchemy-ORM-Modelle werden per configure_auth_models in dieses Modul
 # gepacht – Platzhalter damit Import-Prüftools (mypy, IDE) nicht warnen.
@@ -36,6 +37,15 @@ UserSession: type = None  # type: ignore[assignment]
 # ---------------------------------------------------------------------------
 # Pydantic Base Models
 # ---------------------------------------------------------------------------
+class UserRole(str, enum.Enum):
+    user = "user"
+    admin = "admin"
+
+
+class Language(str, enum.Enum):
+    en = "en"
+    de = "de"
+
 
 class UserBase(BaseModel):
     """Basis-Pydantic-Modell für Benutzer."""
@@ -43,13 +53,6 @@ class UserBase(BaseModel):
     email: EmailStr = Field(..., description="E-Mail-Adresse des Benutzers")
     full_name: Optional[str] = Field(None, description="Vollständiger Name des Benutzers")
     is_active: bool = Field(True, description="Ob der Benutzer aktiv ist")
-
-
-class UserCreate(UserBase):
-    """Pydantic-Modell für die Benutzererstellung."""
-
-    password: str = Field(..., min_length=8, description="Passwort (mindestens 8 Zeichen)")
-    is_superuser: bool = Field(False, description="Ob der Benutzer Superuser-Rechte hat")
 
 
 class UserRegister(BaseModel):
@@ -97,6 +100,7 @@ class UserInDB(UserBase):
     id: UUID = Field(..., description="Eindeutige Benutzer-ID")
     password: str = Field(..., description="Gehashtes Passwort")
     is_superuser: bool = Field(False, description="Superuser-Status")
+    role: UserRole = Field(UserRole.user, description="Rolle des Benutzers")
     created_at: datetime = Field(..., description="Erstellungsdatum")
     updated_at: datetime = Field(..., description="Letztes Update")
     last_login: Optional[datetime] = Field(None, description="Letzter Login")
@@ -107,10 +111,36 @@ class UserInDB(UserBase):
 class UserPublic(UserBase):
     """Pydantic-Modell für öffentliche Benutzerinformationen."""
 
-    id: UUID = Field(..., description="Eindeutige Benutzer-ID")
+    id: UUID = Field(..., serialization_alias="uuid", alias="uuid", description="Eindeutige Benutzer-ID")
     created_at: datetime = Field(..., description="Erstellungsdatum")
+    is_superuser: bool = Field(False, description="Superuser-Status")
+    role: UserRole = Field(User, description="Rolle des Benutzers")
+    department: Optional[str] = Field(None, description="Abteilung")
+    login: str = Field(None, description="Login (E-Mail-Adresse) des Benutzers")
+    email: Optional[EmailStr] = Field(None, description="E-Mail-Adresse des Benutzers", exclude=False)
+    first_name: Optional[str] = Field(None, description="Vorname des Benutzers")
+    last_name: Optional[str] = Field(None, description="Nachname des Benutzers")
+    full_name: Optional[str] = Field(None, description="Voller Name des Benutzers", exclude=False)
+    language: Language = Field(Language.de, description="Bevorzugte Sprache des Benutzers")
+    two_fa_enabled: bool = Field(False, description="2FA-Status")
+    machines: list[str] = Field([], description="Liste der zugeordneten Maschinen")
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    @model_validator(mode='after')
+    def populate_derived_fields(self) -> 'UserPublic':
+        if self.email and not self.login:
+            self.login = self.email
+        if self.full_name and not (self.first_name or self.last_name):
+            parts = self.full_name.strip().split(' ', 1)
+            self.first_name = parts[0] if parts else None
+            self.last_name = parts[1] if len(parts) > 1 else None
+        return self
+
+
+class UserCreate(UserPublic):
+    """Pydantic-Modell für die Benutzererstellung."""
+    password: str = Field(..., min_length=8, description="Passwort (mindestens 8 Zeichen)")
 
 
 class UsersPublic(BaseModel):
