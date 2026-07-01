@@ -17,7 +17,7 @@ dependencies = [
     "sqlalchemy>=2,<3",
     "passlib[bcrypt,argon2]>=1.7.4",
     "argon2-cffi>=23,<24",
-    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager"
+    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager.git"
 ]
 optional-dependencies = { dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "twine"] }
 [project.urls]
