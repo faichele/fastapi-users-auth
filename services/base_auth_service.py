@@ -5,11 +5,22 @@ Diese Klasse definiert die Schnittstelle für alle Authentifizierungsanbieter
 und ermöglicht die Implementierung verschiedener Auth-Strategien.
 """
 
-from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from __future__ import annotations
 
-from ..models.user_models import User, UserRegister
+from abc import ABC, abstractmethod
+from typing import Optional, Dict, Any, TYPE_CHECKING
+
+from ..models.user_models import UserRegister
 from ..models.auth_models import TokenData
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden: Wird dieses
+# Modul importiert, bevor configure_auth_models() lief, bliebe das Binding für
+# immer None (siehe user_models.get_user_model()-Docstring). Da `User` in dieser
+# Datei ausschließlich als Typ-Annotation vorkommt (via `from __future__ import
+# annotations` als String ausgewertet), reicht ein TYPE_CHECKING-only Import.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class BaseAuthService(ABC):

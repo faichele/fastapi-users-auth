@@ -5,15 +5,23 @@ Dieses Modul enthält alle Dependencies für das fastapi_users_auth Modul mit
 Unterstützung für Multi-Provider Authentication.
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from ..models.user_models import User
+from ..models.user_models import get_user_model
 from ..services.auth_service_manager import AuthServiceManager
 from ..services.base_user_service import BaseUserService
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden (siehe
+# user_models.get_user_model()-Docstring). Für Methoden, deren Annotated[User,
+# Depends(...)]-Parameter FastAPI ECHT vorliegen müssen, wird `User =
+# get_user_model()` lokal in der jeweiligen Methode aufgelöst.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class MultiProviderAuthDependencies:
@@ -60,7 +68,7 @@ class MultiProviderAuthDependencies:
             )
         return credentials.credentials
 
-    def get_current_user(self, token: Annotated[str, Depends(get_token)]) -> User:
+    def get_current_user(self, token: Annotated[str, Depends(get_token)]) -> "User":
         """
         Holt den aktuellen Benutzer anhand des Tokens.
 
@@ -84,8 +92,8 @@ class MultiProviderAuthDependencies:
 
     def get_current_active_user(
         self,
-        current_user: Annotated[User, Depends(get_current_user)]
-    ) -> User:
+        current_user: Annotated["User", Depends(get_current_user)]
+    ) -> "User":
         """
         Holt den aktuellen aktiven Benutzer.
 
@@ -107,8 +115,8 @@ class MultiProviderAuthDependencies:
 
     def get_current_active_superuser(
         self,
-        current_user: Annotated[User, Depends(get_current_active_user)]
-    ) -> User:
+        current_user: Annotated["User", Depends(get_current_active_user)]
+    ) -> "User":
         """
         Holt den aktuellen aktiven Superuser.
 
@@ -131,7 +139,7 @@ class MultiProviderAuthDependencies:
     def get_optional_current_user(
         self,
         token: Annotated[Optional[str], Depends(lambda: None)]
-    ) -> Optional[User]:
+    ) -> Optional["User"]:
         """
         Holt den aktuellen Benutzer optional (ohne Exception bei Fehler).
 
@@ -159,6 +167,11 @@ class MultiProviderAuthDependencies:
         Returns:
             FastAPI Dependency-Funktion
         """
+        # Lokal auflösen statt Modul-Ebene: garantiert, dass User bereits
+        # korrekt gepatcht ist (require_permission() wird erst nach dem
+        # App-Start aufgerufen, nicht beim Modul-Import).
+        User = get_user_model()
+
         def check_permission(
             current_user: Annotated[User, Depends(self.get_current_active_user)]
         ) -> User:
@@ -182,6 +195,11 @@ class MultiProviderAuthDependencies:
         Returns:
             FastAPI Dependency-Funktion
         """
+        # Lokal auflösen statt Modul-Ebene: garantiert, dass User bereits
+        # korrekt gepatcht ist (require_user_or_superuser() wird erst nach
+        # dem App-Start aufgerufen, nicht beim Modul-Import).
+        User = get_user_model()
+
         def check_user_access(
             current_user: Annotated[User, Depends(self.get_current_active_user)],
             user_id: UUID  # Dies wird vom Router als Path-Parameter übergeben

@@ -6,18 +6,27 @@ Sie erbt von BaseAuthService und stellt eine konkrete Implementierung für
 OAuth-basierte Authentifizierung bereit.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from uuid import UUID
 import httpx
 import json
 
-from ..models.user_models import User, UserRegister
+from ..models.user_models import UserRegister
 from ..models.auth_models import TokenData
 from ..utils.security import SecurityUtils
 from ..utils.token_utils import TokenUtils
 from .base_auth_service import BaseAuthService
 from .user_service import DatabaseUserService
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden (siehe
+# user_models.get_user_model()-Docstring). Alle DB-Zugriffe laufen bereits
+# sicher über DatabaseUserService; `User` kommt hier nur als Typ-Annotation vor.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class OAuthAuthService(BaseAuthService):

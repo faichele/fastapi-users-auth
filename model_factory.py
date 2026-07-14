@@ -20,8 +20,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import relationship
+
+from fastapi_logging_manager import logger_manager
+
+
+logger = logger_manager.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -60,11 +65,64 @@ def _mixin_cache_key(user_mixins: list[type] | None) -> tuple[int, ...]:
     return tuple(id(m) for m in user_mixins)
 
 
+def _cache_key_for_column_type(column_type: Any) -> tuple[Any, ...]:
+    type_name = f"{column_type.__class__.__module__}.{column_type.__class__.__qualname__}"
+    extra_attributes = []
+    for attribute_name in ("length", "precision", "scale", "as_uuid"):
+        if hasattr(column_type, attribute_name):
+            extra_attributes.append((attribute_name, getattr(column_type, attribute_name)))
+    return (type_name, tuple(extra_attributes))
+
+
+def _user_attrs_override_cache_key(user_attrs_override: dict[str, Any] | None) -> tuple[Any, ...]:
+    if not user_attrs_override:
+        return ()
+
+    cache_key_parts: list[tuple[str, Any]] = []
+    for attribute_name, value in sorted(user_attrs_override.items()):
+        if isinstance(value, Column):
+            foreign_keys = tuple(sorted(fk.target_fullname for fk in value.foreign_keys))
+            cache_key_parts.append(
+                (
+                    attribute_name,
+                    (
+                        "Column",
+                        _cache_key_for_column_type(value.type),
+                        value.primary_key,
+                        value.nullable,
+                        value.index,
+                        value.unique,
+                        value.autoincrement,
+                        foreign_keys,
+                    ),
+                )
+            )
+        else:
+            cache_key_parts.append(
+                (
+                    attribute_name,
+                    (
+                        "Value",
+                        value.__class__.__module__,
+                        value.__class__.__qualname__,
+                        repr(value),
+                    ),
+                )
+            )
+
+    return tuple(cache_key_parts)
+
+
 def _patch_module(module_name: str, **updates: Any) -> None:
     module = sys.modules.get(module_name)
+
+    logger.info(f"Patching module {module_name} with {updates}")
     if module is None:
+        logger.warning("Module %s not found in sys.modules", module_name)
         return
+
     for attribute_name, value in updates.items():
+        logger.info(f"Setting {module_name}.{attribute_name} = {value}")
         setattr(module, attribute_name, value)
 
 
@@ -109,7 +167,12 @@ def create_auth_models(
     """
 
     normalized_prefix = _normalize_prefix(table_prefix)
-    cache_key: Any = (normalized_prefix, _mixin_cache_key(user_mixins))
+    cache_key: Any = (
+        normalized_prefix,
+        _mixin_cache_key(user_mixins),
+        user_class_name,
+        _user_attrs_override_cache_key(user_attrs_override),
+    )
     base_cache = _cache_for_base(base)
     cached_models = base_cache.get(cache_key)
     if cached_models is not None:
@@ -125,16 +188,12 @@ def create_auth_models(
     user_attrs: dict[str, Any] = {
         "__module__": __name__,
         "__tablename__": user_table_name,
-        "id": Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4())),
-        # "uuid": Column(String(36), primary_key=False, index=False, default=lambda: str(uuid.uuid4())),
+        "id": Column(Uuid(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4),
         "email": Column(String(255), unique=True, nullable=False, index=True),
         "hashed_password": Column(String(255), nullable=False),
         "is_active": Column(Boolean, default=True, nullable=False),
         "is_superuser": Column(Boolean, default=False, nullable=False),
         "full_name": Column(String(255), nullable=True),
-        "department": Column(String(255), nullable=True),
-        "language": Column(String(10), nullable=False, default="de"),
-        "two_fa_enabled": Column(Boolean, default=False, nullable=False),
         "created_at": Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False),
         "updated_at": Column(
             DateTime(timezone=True),
@@ -161,7 +220,7 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": group_table_name,
         "name": Column(String(255), unique=True, nullable=False, index=True),
-        "id": Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4())),
+        "id": Column(Uuid(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4),
         "description": Column(String(1024), nullable=True),
         "is_active": Column(Boolean, default=True, nullable=False),
         "created_at": Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False),
@@ -174,15 +233,21 @@ def create_auth_models(
     }
     Group = type(f"AuthGroup_{class_suffix}", (base,), group_attrs)
 
+    # FK-Spaltentypen an die tatsächlichen PK-Typen der dynamisch erzeugten Modelle anpassen.
+    user_table = getattr(User, "__table__")
+    group_table = getattr(Group, "__table__")
+    user_id_fk_type = user_table.c.id.type.copy()
+    group_id_fk_type = group_table.c.id.type.copy()
+
     membership_attrs = {
         "__module__": __name__,
         "__tablename__": membership_table_name,
         "__table_args__": (
             UniqueConstraint("user_id", "group_id", name=membership_constraint_name),
         ),
-        "id": Column(String(36), primary_key=True, index=True, default=lambda: str(uuid.uuid4())),
-        "user_id": Column(String(36), ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"), nullable=False, index=True),
-        "group_id": Column(String(36), ForeignKey(f"{group_table_name}.id", ondelete="CASCADE"), nullable=False, index=True),
+        "id": Column(Uuid(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4),
+        "user_id": Column(user_id_fk_type, ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"), nullable=False, index=True),
+        "group_id": Column(group_id_fk_type, ForeignKey(f"{group_table_name}.id", ondelete="CASCADE"), nullable=False, index=True),
         "role": Column(String(50), default="member", nullable=False),
         "created_at": Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False),
         "updated_at": Column(
@@ -193,6 +258,7 @@ def create_auth_models(
         ),
     }
     UserGroupMembership = type(f"AuthUserGroupMembership_{class_suffix}", (base,), membership_attrs)
+    membership_table = getattr(UserGroupMembership, "__table__")
 
     User.group_memberships = relationship(
         UserGroupMembership,
@@ -201,7 +267,7 @@ def create_auth_models(
     )
     User.groups = relationship(
         Group,
-        secondary=UserGroupMembership.__table__,
+        secondary=membership_table,
         back_populates="users",
         viewonly=True,
         overlaps="group_memberships,memberships,user,group",
@@ -214,7 +280,7 @@ def create_auth_models(
     )
     Group.users = relationship(
         User,
-        secondary=UserGroupMembership.__table__,
+        secondary=membership_table,
         back_populates="groups",
         viewonly=True,
         overlaps="memberships,group_memberships,user,group",
@@ -233,7 +299,7 @@ def create_auth_models(
     # -----------------------------------------------------------------------
     # UserSession – anwendungsunabhängiges Session-Modell
     #
-    # FK: user_id → users.id
+    # FK: user_uuid → users.id (Legacy-Spaltenname, Typ folgt dem User-PK)
     # login_source: Plain String(16); der Wert wird von der Anwendung gesetzt
     #               (z. B. "backend", "frontend", "unknown").
     # -----------------------------------------------------------------------
@@ -241,8 +307,8 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": session_table_name,
         "id": Column(Integer, primary_key=True, index=True, autoincrement=True),
-        "user_id": Column(
-            String(36),
+        "user_uuid": Column(
+            user_id_fk_type.copy(),
             ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"),
             nullable=False,
             index=True,

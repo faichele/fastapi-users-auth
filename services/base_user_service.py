@@ -5,11 +5,22 @@ Diese Klasse definiert die Schnittstelle für alle Benutzerverwaltungsanbieter
 und ermöglicht die Implementierung verschiedener User-Storage-Strategien.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from uuid import UUID
 
-from ..models.user_models import User, UserCreate, UserUpdate, UserUpdateMe, UpdatePassword
+from ..models.user_models import UserCreate, UserUpdate, UserUpdateMe, UpdatePassword
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden: Wird dieses
+# Modul importiert, bevor configure_auth_models() lief, bliebe das Binding für
+# immer None (siehe user_models.get_user_model()-Docstring). Da `User` in dieser
+# Datei ausschließlich als Typ-Annotation vorkommt (via `from __future__ import
+# annotations` als String ausgewertet), reicht ein TYPE_CHECKING-only Import.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class BaseUserService(ABC):

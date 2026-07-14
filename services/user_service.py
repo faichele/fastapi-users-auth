@@ -6,14 +6,27 @@ Sie erbt von BaseUserService und stellt eine konkrete Implementierung für
 datenbankbasierte Benutzerspeicherung bereit.
 """
 
-from typing import Optional, List, Dict, Any
+from __future__ import annotations
+
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 from uuid import UUID
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from ..models.user_models import User, UserCreate, UserUpdate, UserUpdateMe, UpdatePassword
+# Hinweis: ``User`` wird hier nur für Typ-Annotationen benötigt (via
+# `from __future__ import annotations` als String ausgewertet, daher
+# TYPE_CHECKING-only). Für Laufzeitzugriffe (Queries, Konstruktor) wird
+# get_user_model() verwendet: Ein echtes `from ..models.user_models import
+# User`-Binding bliebe für immer None, wenn dieses Modul vor
+# configure_auth_models() importiert wurde (z. B. über die Dependency-Kette
+# der Anwendung), und würde durch das spätere Modul-Patching nicht aktualisiert.
+from ..models.user_models import UserCreate, UserUpdate, UserUpdateMe, UpdatePassword
+from ..models.user_models import get_user_model
 from ..utils.security import SecurityUtils
 from .base_user_service import BaseUserService
+
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class DatabaseUserService(BaseUserService):
@@ -39,7 +52,7 @@ class DatabaseUserService(BaseUserService):
     def _normalize_user_id(self, user_id: UUID | str) -> UUID | str:
         """Normalize user IDs to the SQL type of User.id (UUID or String)."""
         try:
-            id_python_type = User.id.type.python_type
+            id_python_type = get_user_model().id.type.python_type
         except Exception:
             id_python_type = str
 
@@ -61,6 +74,7 @@ class DatabaseUserService(BaseUserService):
         Returns:
             User-Objekt wenn gefunden, None andernfalls
         """
+        User = get_user_model()
         normalized_user_id = self._normalize_user_id(user_id)
         return self.db.query(User).filter(User.id == normalized_user_id).first()
 
@@ -74,6 +88,7 @@ class DatabaseUserService(BaseUserService):
         Returns:
             User-Objekt wenn gefunden, None andernfalls
         """
+        User = get_user_model()
         return self.db.query(User).filter(User.email == email).first()
 
     def get_user_by_external_id(self, external_id: str, provider: str) -> Optional[User]:
@@ -116,6 +131,7 @@ class DatabaseUserService(BaseUserService):
         Returns:
             Tuple aus (Liste der Benutzer, Gesamtanzahl)
         """
+        User = get_user_model()
         query = self.db.query(User)
 
         # Filter anwenden
@@ -162,7 +178,7 @@ class DatabaseUserService(BaseUserService):
         hashed_password = self.security.get_password_hash(user_create.password)
 
         # Benutzer erstellen
-        db_user = User(
+        db_user = get_user_model()(
             email=user_create.email,
             hashed_password=hashed_password,
             full_name=user_create.full_name,
@@ -353,6 +369,7 @@ class DatabaseUserService(BaseUserService):
         Returns:
             True wenn verfügbar, False wenn bereits verwendet
         """
+        User = get_user_model()
         query = self.db.query(User).filter(User.email == email)
 
         if exclude_user_id:

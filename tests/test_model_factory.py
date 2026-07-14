@@ -1,6 +1,10 @@
 from pathlib import Path
+from importlib import import_module
 
 import sys
+from uuid import UUID
+
+import sqlalchemy as sa
 from sqlalchemy.orm import declarative_base
 
 repo_root = Path(__file__).resolve().parents[3]
@@ -8,9 +12,12 @@ packages_root = repo_root / "packages"
 sys.path.insert(0, str(repo_root))
 sys.path.insert(0, str(packages_root))
 
-from fastapi_shared_orm import Base as SharedBase
-from fastapi_users_auth import configure_auth_models, create_auth_models
-from fastapi_users_auth.models import group_models, user_models
+SharedBase = import_module("packages.fastapi_shared_orm").Base
+fastapi_users_auth = import_module("packages.fastapi_users_auth")
+create_auth_models = fastapi_users_auth.create_auth_models
+configure_auth_models = fastapi_users_auth.configure_auth_models
+group_models = import_module("packages.fastapi_users_auth.models.group_models")
+user_models = import_module("packages.fastapi_users_auth.models.user_models")
 
 
 def test_create_auth_models_builds_prefixed_tables_and_caches_per_base_prefix():
@@ -40,6 +47,26 @@ def test_create_auth_models_builds_prefixed_tables_and_caches_per_base_prefix():
     assert hasattr(models.User, "groups")
     assert hasattr(models.Group, "memberships")
     assert hasattr(models.Group, "users")
+
+
+def test_create_auth_models_uses_separate_cache_entries_for_different_user_id_types():
+    TestBase = declarative_base()
+    UuidBase = declarative_base()
+
+    create_auth_models(TestBase, table_prefix="tenant_")
+    uuid_models = create_auth_models(
+        UuidBase,
+        table_prefix="tenant_",
+        user_attrs_override={
+            "id": sa.Column(sa.UUID(as_uuid=True), primary_key=True, index=True, default=sa.text("gen_random_uuid()")),
+        },
+    )
+
+    assert type(uuid_models.UserSession.__table__.c.user_uuid.type) is type(uuid_models.User.__table__.c.id.type)
+    assert type(uuid_models.UserGroupMembership.__table__.c.user_id.type) is type(uuid_models.User.__table__.c.id.type)
+    assert uuid_models.User.__table__.c.id.type.python_type is UUID
+    assert uuid_models.UserSession.__table__.c.user_uuid.type.python_type is UUID
+    assert uuid_models.UserGroupMembership.__table__.c.user_id.type.python_type is UUID
 
 
 def test_configure_auth_models_rebinds_public_orm_aliases():

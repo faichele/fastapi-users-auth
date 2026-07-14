@@ -12,12 +12,12 @@ Token/Reset-Modelle sind Pydantic-Schemas in:
 Bitte neue Imports bevorzugt aus diesen Modulen beziehen.
 """
 
-from packages.fastapi_users_auth.model_factory import (
+from fastapi_users_auth.model_factory import (
     AuthORMModels,
     create_auth_models,
     configure_auth_models,
 )
-from packages.fastapi_users_auth.models.user_models import (
+from fastapi_users_auth.models.user_models import (
     UserBase,
     UserCreate,
     UserUpdate,
@@ -30,7 +30,7 @@ from packages.fastapi_users_auth.models.user_models import (
     UpdatePassword,
 )
 
-from packages.fastapi_users_auth.models.group_models import (
+from fastapi_users_auth.models.group_models import (
     GroupBase,
     GroupCreate,
     GroupUpdate,
@@ -45,7 +45,7 @@ from packages.fastapi_users_auth.models.group_models import (
     UserGroupMembershipsPublic,
 )
 
-from packages.fastapi_users_auth.models.auth_models import (
+from fastapi_users_auth.models.auth_models import (
     Token,
     TokenData,
     TokenPayload,
