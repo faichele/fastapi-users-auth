@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fastapi-users-auth"
-version = "0.0.2"
+version = "0.0.3"
 description = "A FastAPI library for user authentication and management"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -17,7 +17,7 @@ dependencies = [
     "sqlalchemy>=2,<3",
     "passlib[bcrypt,argon2]>=1.7.4",
     "argon2-cffi>=23,<24",
-    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager"
+    "fastapi-logging-manager @ git+https://github.com/faichele/fastapi-logging-manager.git@v0.0.4"
 ]
 optional-dependencies = { dev = ["pytest", "pytest-cov", "mypy", "ruff", "build", "twine"] }
 [project.urls]
