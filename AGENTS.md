@@ -85,3 +85,17 @@ Tokens, geschuetzte Endpunkte, Provider-Fallbacks, ORM-Praefixe und Modell-Alias
 - Keine Tokens oder Passwoerter in Logs ausgeben, auch nicht teilweise oder zu Debug-Zwecken.
 - Keine breite Ausnahmebehandlung einfuehren, die Authentifizierungsfehler verschluckt.
 - Keine manuellen Aenderungen an `.idea`-, Cache- oder Build-Artefakten.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repository's GitHub Issues. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-label triage vocabulary is used. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses a single-context domain-doc layout. See `docs/agents/domain.md`.
