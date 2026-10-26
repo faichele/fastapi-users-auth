@@ -65,8 +65,9 @@ class AuthSettingsRouter:
                 return current_user
 
             return self.templates.TemplateResponse(
-                "settings.html",
-                {
+                request=request,
+                name="settings.html",
+                context={
                     "request": request,
                     "title": "Auth Einstellungen",
                     "user": current_user,
