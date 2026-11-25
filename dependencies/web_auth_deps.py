@@ -55,7 +55,7 @@ async def get_mandatory_current_user(
 ) -> object:
     """
     Mandatory User:
-    - HTML\-Navigation => Redirect auf `/login?next=<url>`
+    - HTML-Navigation => Redirect auf `/login?next=<url>`
     - API/JSON/AJAX => `403 Forbidden`
     """
     if current_user is not None:
@@ -83,7 +83,7 @@ def auth_or_redirect(
     login_path: str = "/login",
 ) -> RedirectResponse:
     """
-    Kleine Helper\-Funktion für HTML\-Handler (wenn man explizit redirecten will).
+    Kleine Helper-Funktion für HTML-Handler (wenn man explizit redirecten will).
     """
     next_url = str(request.url)
     qs = urlencode({"next": next_url})
