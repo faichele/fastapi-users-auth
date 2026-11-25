@@ -1,16 +1,10 @@
-from pathlib import Path
+from uuid import UUID
 
-import sys
-from sqlalchemy.orm import declarative_base
-
-repo_root = Path(__file__).resolve().parents[3]
-packages_root = repo_root / "packages"
-sys.path.insert(0, str(repo_root))
-sys.path.insert(0, str(packages_root))
-
-from fastapi_shared_orm import Base as SharedBase
+import sqlalchemy as sa
 from fastapi_users_auth import configure_auth_models, create_auth_models
 from fastapi_users_auth.models import group_models, user_models
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.orm import declarative_base
 
 
 def test_create_auth_models_builds_prefixed_tables_and_caches_per_base_prefix():
@@ -42,8 +36,40 @@ def test_create_auth_models_builds_prefixed_tables_and_caches_per_base_prefix():
     assert hasattr(models.Group, "users")
 
 
+def test_user_id_override_controls_foreign_key_types():
+    TestBase = declarative_base()
+    string_models = create_auth_models(
+        TestBase,
+        table_prefix="tenant_",
+        user_attrs_override={
+            "id": sa.Column(sa.String(36), primary_key=True),
+        },
+    )
+
+    assert string_models.User.__table__.c.id.type.python_type is str
+    assert string_models.UserSession.__table__.c.user_uuid.type.python_type is str
+    assert string_models.UserGroupMembership.__table__.c.user_id.type.python_type is str
+
+
+def test_default_id_columns_compile_as_postgresql_uuid():
+    models = create_auth_models(declarative_base())
+    columns = [
+        models.User.__table__.c.id,
+        models.Group.__table__.c.id,
+        models.UserGroupMembership.__table__.c.id,
+        models.UserGroupMembership.__table__.c.user_id,
+        models.UserGroupMembership.__table__.c.group_id,
+        models.UserSession.__table__.c.user_uuid,
+    ]
+    for column in columns:
+        assert column.type.python_type is UUID
+        assert column.type.compile(dialect=postgresql.dialect()) == "UUID"
+    assert {"department", "language", "two_fa_enabled"} <= set(models.User.__table__.c.keys())
+
+
 def test_configure_auth_models_rebinds_public_orm_aliases():
     TestBase = declarative_base()
+    SharedBase = declarative_base()
     default_models = create_auth_models(SharedBase)
 
     try:

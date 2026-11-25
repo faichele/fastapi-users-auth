@@ -6,17 +6,28 @@ Sie erbt von BaseAuthService und stellt eine konkrete Implementierung für
 datenbankbasierte Authentifizierung bereit.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from uuid import UUID
 from sqlalchemy.orm import Session
 
-from ..models.user_models import User, UserRegister
+from ..models.user_models import UserRegister
 from ..models.auth_models import Token, TokenData, LoginResponse
 from ..utils.security import SecurityUtils
 from ..utils.token_utils import TokenUtils
 from .base_auth_service import BaseAuthService
 from .user_service import DatabaseUserService
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden: Wird dieses
+# Modul importiert, bevor configure_auth_models() lief, bliebe das Binding für
+# immer None (siehe user_models.get_user_model()-Docstring). Alle DB-Zugriffe
+# laufen bereits sicher über DatabaseUserService (get_user_model()); `User`
+# kommt hier nur noch als Typ-Annotation vor.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class DatabaseAuthService(BaseAuthService):

@@ -9,22 +9,35 @@ It includes:
 - Session management
 """
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from ..models.user_models import User
+from ..models.user_models import get_user_model
 from ..services.auth_service import AuthService
-from ..services.user_service import UserService, BaseUserService
+from ..services.user_service import UserService
 
-
-# Globale Dependency-Factories, die in create_user_router über Closures gebunden werden
-#UserServiceDep = Annotated[BaseUserService, Depends(lambda: None)]
-#CurrentUserDep = Annotated[User, Depends(lambda: None)]
-#CurrentActiveUserDep = Annotated[User, Depends(lambda: None)]
-#CurrentSuperuserDep = Annotated[User, Depends(lambda: None)]
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden: Wird
+# dieses Modul importiert, bevor configure_auth_models() lief (z. B. über die
+# Dependency-Kette der Anwendung), bliebe das Binding für immer None (siehe
+# user_models.get_user_model()-Docstring).
+#
+# Für reine Typ-Hinweise (Methoden, die NICHT als FastAPI-Dependency-Callable
+# mit Annotated[User, Depends(...)] verdrahtet werden) reicht ein
+# TYPE_CHECKING-only Import mit String-Forward-Refs.
+#
+# Für die Dependency-Factories weiter unten (get_current_user,
+# get_current_active_user, get_current_active_superuser, require_permission),
+# deren verschachtelte Funktionen FastAPI ECHT als Annotated[User, Depends(...)]
+# vorliegen müssen, wird `User = get_user_model()` stattdessen lokal in der
+# jeweils umschließenden Factory-Funktion aufgelöst – das geschieht beim
+# Aufruf der Factory (nach dem App-Start, also nach configure_auth_models()),
+# nicht beim Modul-Import.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class AuthDependencies:
@@ -82,7 +95,7 @@ class AuthDependencies:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    def get_user_by_id(self, user_id: UUID) -> User:
+    def get_user_by_id(self, user_id: UUID) -> "User":
         """
         Dependency to get a user by their UUID.
 
@@ -106,8 +119,8 @@ class AuthDependencies:
     def verify_user_access(
         self,
         target_user_id: UUID,
-        current_user: User,
-    ) -> User:
+        current_user: "User",
+    ) -> "User":
         """
         Verifies that the current user has access to a specific user's data.
 
@@ -146,6 +159,10 @@ class AuthDependencies:
         Returns:
             FastAPI dependency that checks for the permission
         """
+        # Lokal auflösen statt Modul-Ebene: garantiert, dass User bereits
+        # korrekt gepatcht ist (require_permission() wird erst nach dem
+        # App-Start aufgerufen, nicht beim Modul-Import).
+        User = get_user_model()
 
         def check_permission(
             current_user: Annotated[User, Depends(get_current_active_user)],
@@ -163,7 +180,7 @@ class AuthDependencies:
     def optional_current_user(
         self,
         credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
-    ) -> Optional[User]:
+    ) -> Optional["User"]:
         """
         Retrieves the current user from the token, if available.
 
@@ -183,6 +200,11 @@ class AuthDependencies:
 
 
 def get_current_user(auth_deps: AuthDependencies):
+    # Lokal auflösen statt Modul-Ebene: garantiert, dass User bereits korrekt
+    # gepatcht ist (diese Factory wird erst nach dem App-Start aufgerufen,
+    # z. B. beim Bau der Router, nicht beim Modul-Import).
+    User = get_user_model()
+
     def dependency(token: Annotated[str, Depends(auth_deps.get_token)]) -> User:
         user = auth_deps.auth_service.get_current_user(token)
         if not user:
@@ -195,6 +217,8 @@ def get_current_user(auth_deps: AuthDependencies):
     return dependency
 
 def get_current_active_user(auth_deps: AuthDependencies):
+    User = get_user_model()
+
     def dependency(current_user: Annotated[User, Depends(get_current_user(auth_deps))]) -> User:
         if not current_user.is_active:
             raise HTTPException(
@@ -205,6 +229,8 @@ def get_current_active_user(auth_deps: AuthDependencies):
     return dependency
 
 def get_current_active_superuser(auth_deps: AuthDependencies):
+    User = get_user_model()
+
     def dependency(current_user: Annotated[User, Depends(get_current_active_user(auth_deps))]) -> User:
         if not current_user.is_superuser:
             raise HTTPException(
@@ -213,14 +239,6 @@ def get_current_active_superuser(auth_deps: AuthDependencies):
             )
         return current_user
     return dependency
-
-
-# --- Globale Dependency-Typen für den Router ---
-# Diese werden jetzt im Router mit den korrekten Funktionen initialisiert.
-UserServiceDep = Annotated[BaseUserService, Depends(lambda: None)]
-CurrentUserDep = Annotated[User, Depends(lambda: None)]
-CurrentActiveUserDep = Annotated[User, Depends(lambda: None)]
-CurrentSuperuserDep = Annotated[User, Depends(lambda: None)]
 
 
 # Convenience-Funktionen für einfache Verwendung
@@ -242,7 +260,12 @@ def create_auth_dependencies(auth_service: AuthService, user_service: UserServic
 # Hinweis:
 # Die früher hier definierten globalen Type-Aliases
 #   CurrentUser, CurrentActiveUser, CurrentSuperuser
-# wurden entfernt, da sie mit Lambdas arbeiteten, die zu
-# ungültigen OpenAPI-Parametern (query.self / query.deps)
-# und Laufzeitfehlern führen konnten. Stattdessen sollten
-# Router explizit Depends(auth_deps.get_current_*...) nutzen.
+# sowie ihre Nachfolger UserServiceDep, CurrentUserDep, CurrentActiveUserDep,
+# CurrentSuperuserDep wurden entfernt: Sie werteten Annotated[User, ...] auf
+# Modul-Ebene aus (mit Lambdas als Platzhalter-Dependency), was zu ungültigen
+# OpenAPI-Parametern (query.self / query.deps) UND, unabhängig davon, zu einem
+# dauerhaft None gebundenen `User` führen konnte, falls dieses Modul vor
+# configure_auth_models() importiert wurde. Router sollten stattdessen
+# explizit Depends(auth_deps.get_current_*...) nutzen, wie es
+# routers/user_router.py bereits tut (lokale Annotated[...]-Aliases pro
+# Router-Instanz, aufgebaut aus den oben stehenden Factory-Funktionen).

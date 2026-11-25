@@ -29,9 +29,48 @@ from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator
 
 # SQLAlchemy-ORM-Modelle werden per configure_auth_models in dieses Modul
-# gepacht – Platzhalter damit Import-Prüftools (mypy, IDE) nicht warnen.
+# gepatcht – Platzhalter damit Import-Prüftools (mypy, IDE) nicht warnen.
 User: type = None  # type: ignore[assignment]
 UserSession: type = None  # type: ignore[assignment]
+
+
+def get_user_model() -> type:
+    """Löst die konfigurierte User-ORM-Klasse zum Aufrufzeitpunkt auf.
+
+    WICHTIG: Code innerhalb des Pakets darf die ORM-Klassen NICHT per
+    ``from ..models.user_models import User`` zur Importzeit für
+    Laufzeitzwecke binden: Wird das importierende Modul geladen, bevor
+    :func:`~fastapi_users_auth.model_factory.configure_auth_models` die
+    Modelle in dieses Modul gepatcht hat, bleibt das lokale Binding für
+    immer ``None`` (Kopiersemantik von ``from``-Imports). Diese Funktion
+    liest das Modul-Attribut stattdessen bei jedem Aufruf und ist damit
+    unabhängig von der Import-Reihenfolge.
+
+    Raises:
+        RuntimeError: Wenn ``configure_auth_models`` noch nicht aufgerufen wurde.
+    """
+    if User is None:
+        raise RuntimeError(
+            "Auth-ORM-Modelle sind nicht konfiguriert: configure_auth_models(Base, ...) "
+            "muss aufgerufen werden, bevor Auth-Services/-Dependencies verwendet werden."
+        )
+    return User
+
+
+def get_user_session_model() -> type:
+    """Löst die konfigurierte UserSession-ORM-Klasse zum Aufrufzeitpunkt auf.
+
+    Siehe :func:`get_user_model` zur Begründung des späten Bindens.
+
+    Raises:
+        RuntimeError: Wenn ``configure_auth_models`` noch nicht aufgerufen wurde.
+    """
+    if UserSession is None:
+        raise RuntimeError(
+            "Auth-ORM-Modelle sind nicht konfiguriert: configure_auth_models(Base, ...) "
+            "muss aufgerufen werden, bevor Auth-Services/-Dependencies verwendet werden."
+        )
+    return UserSession
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +153,7 @@ class UserPublic(UserBase):
     id: UUID = Field(..., serialization_alias="uuid", alias="uuid", description="Eindeutige Benutzer-ID")
     created_at: datetime = Field(..., description="Erstellungsdatum")
     is_superuser: bool = Field(False, description="Superuser-Status")
-    role: UserRole = Field(User, description="Rolle des Benutzers")
+    role: UserRole = Field(UserRole.user, description="Rolle des Benutzers")
     department: Optional[str] = Field(None, description="Abteilung")
     login: str = Field(None, description="Login (E-Mail-Adresse) des Benutzers")
     email: Optional[EmailStr] = Field(None, description="E-Mail-Adresse des Benutzers", exclude=False)

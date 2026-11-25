@@ -5,13 +5,22 @@ Dieser Service Manager verwaltet mehrere Authentifizierungsanbieter und
 stellt Fallback-Mechanismen sowie kombinierte Funktionalität bereit.
 """
 
-from typing import Optional, List, Dict, Any, Union
+from __future__ import annotations
+
+from typing import Optional, List, Dict, Any, Union, TYPE_CHECKING
 from uuid import UUID
 
-from ..models.user_models import User, UserRegister
+from ..models.user_models import UserRegister
 from ..models.auth_models import TokenData
 from .base_auth_service import BaseAuthService
 from .base_user_service import BaseUserService
+
+# `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
+# NICHT per `from ..models.user_models import User` gebunden werden (siehe
+# user_models.get_user_model()-Docstring). `User` kommt hier nur als
+# Typ-Annotation vor.
+if TYPE_CHECKING:
+    from ..models.user_models import User
 
 
 class AuthServiceManager:

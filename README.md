@@ -79,6 +79,12 @@ users_auth/
 
 ## Installation & Integration
 
+**Migration:** Die generierten User-, Group- und Membership-IDs verwenden
+SQLAlchemy `Uuid` (auf PostgreSQL `UUID`). Bestehende Datenbanken mit
+String-IDs und zugehörigen Fremdschlüsseln müssen im Consumer-Projekt migriert
+werden. `UserSession.user_uuid` ersetzt die bisherige Spalte `user_id`; bereits
+existierende Session-Tabellen benötigen ebenfalls eine Migration.
+
 ### 1. Einfache Integration (empfohlen)
 
 ```python

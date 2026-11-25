@@ -1,22 +1,19 @@
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-import sys
 from sqlalchemy import UniqueConstraint
 
 repo_root = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(repo_root))
 
 from fastapi_users_auth.models.group_models import (
-    Group,
     GroupCreate,
     GroupPublic,
-    UserGroupMembership,
     UserGroupMembershipCreate,
     UserGroupMembershipPublic,
 )
-from fastapi_users_auth.models.user_models import User
 
 
 def test_group_models_validate_basic_payloads():
@@ -58,6 +55,16 @@ def test_membership_models_validate_ids_and_role():
 
 
 def test_group_orm_models_define_relationships_and_constraints():
+    # Die ORM-Klassen existieren erst nach configure_auth_models(); Import-
+    # Bindings zur Modulzeit wären None (siehe model_factory-Doku).
+    from fastapi_users_auth import create_auth_models
+    from sqlalchemy.orm import declarative_base
+
+    models = create_auth_models(declarative_base())
+    User = models.User
+    Group = models.Group
+    UserGroupMembership = models.UserGroupMembership
+
     assert Group.__tablename__ == "groups"
     assert UserGroupMembership.__tablename__ == "user_group_memberships"
     assert hasattr(User, "group_memberships")

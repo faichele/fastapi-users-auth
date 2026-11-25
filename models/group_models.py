@@ -29,6 +29,45 @@ Group = None  # type: ignore[assignment]  – wird durch configure_auth_models()
 UserGroupMembership = None  # type: ignore[assignment]  – wird durch configure_auth_models() ersetzt
 
 
+def get_group_model() -> type:
+    """Löst die konfigurierte Group-ORM-Klasse zum Aufrufzeitpunkt auf.
+
+    WICHTIG: Code innerhalb des Pakets darf die ORM-Klasse NICHT per
+    ``from ..models.group_models import Group`` zur Importzeit für
+    Laufzeitzwecke binden: Wird das importierende Modul geladen, bevor
+    :func:`~fastapi_users_auth.model_factory.configure_auth_models` die
+    Modelle in dieses Modul gepatcht hat, bleibt das lokale Binding für
+    immer ``None`` (Kopiersemantik von ``from``-Imports). Diese Funktion
+    liest das Modul-Attribut stattdessen bei jedem Aufruf und ist damit
+    unabhängig von der Import-Reihenfolge.
+
+    Raises:
+        RuntimeError: Wenn ``configure_auth_models`` noch nicht aufgerufen wurde.
+    """
+    if Group is None:
+        raise RuntimeError(
+            "Auth-ORM-Modelle sind nicht konfiguriert: configure_auth_models(Base, ...) "
+            "muss aufgerufen werden, bevor Auth-Services/-Dependencies verwendet werden."
+        )
+    return Group
+
+
+def get_user_group_membership_model() -> type:
+    """Löst die konfigurierte UserGroupMembership-ORM-Klasse zum Aufrufzeitpunkt auf.
+
+    Siehe :func:`get_group_model` zur Begründung des späten Bindens.
+
+    Raises:
+        RuntimeError: Wenn ``configure_auth_models`` noch nicht aufgerufen wurde.
+    """
+    if UserGroupMembership is None:
+        raise RuntimeError(
+            "Auth-ORM-Modelle sind nicht konfiguriert: configure_auth_models(Base, ...) "
+            "muss aufgerufen werden, bevor Auth-Services/-Dependencies verwendet werden."
+        )
+    return UserGroupMembership
+
+
 class GroupBase(BaseModel):
     """Basis-Pydantic-Modell für Gruppen."""
 
