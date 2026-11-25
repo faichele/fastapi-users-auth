@@ -9,7 +9,7 @@ It includes:
 - Session management
 """
 
-from typing import Annotated, Optional, TYPE_CHECKING
+from typing import Annotated, Any, Optional, TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
@@ -17,6 +17,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from ..models.user_models import get_user_model
 from ..services.auth_service import AuthService
+from ..services.base_user_service import BaseUserService
 from ..services.user_service import UserService
 
 # `User` wird zur Laufzeit von configure_auth_models() gepatcht und darf hier
@@ -241,6 +242,47 @@ def get_current_active_superuser(auth_deps: AuthDependencies):
     return dependency
 
 
+def _compat_auth_deps() -> AuthDependencies:
+    from .auth_provider import get_auth_deps
+
+    return get_auth_deps()
+
+
+def _compat_current_user(
+    request: Request,
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(HTTPBearer(auto_error=False))],
+    auth_deps: Annotated[AuthDependencies, Depends(_compat_auth_deps)],
+) -> Any:
+    token = auth_deps.get_token(request, credentials)
+    return get_current_user(auth_deps)(token)
+
+
+def _compat_active_user(
+    current_user: Annotated[Any, Depends(_compat_current_user)],
+    auth_deps: Annotated[AuthDependencies, Depends(_compat_auth_deps)],
+) -> Any:
+    return get_current_active_user(auth_deps)(current_user)
+
+
+def _compat_superuser(
+    current_user: Annotated[Any, Depends(_compat_active_user)],
+    auth_deps: Annotated[AuthDependencies, Depends(_compat_auth_deps)],
+) -> Any:
+    return get_current_active_superuser(auth_deps)(current_user)
+
+
+def _compat_user_service(
+    auth_deps: Annotated[AuthDependencies, Depends(_compat_auth_deps)],
+) -> BaseUserService:
+    return auth_deps.user_service
+
+
+UserServiceDep = Annotated[BaseUserService, Depends(_compat_user_service)]
+CurrentUserDep = Annotated[Any, Depends(_compat_current_user)]
+CurrentActiveUserDep = Annotated[Any, Depends(_compat_active_user)]
+CurrentSuperuserDep = Annotated[Any, Depends(_compat_superuser)]
+
+
 # Convenience-Funktionen für einfache Verwendung
 
 def create_auth_dependencies(auth_service: AuthService, user_service: UserService) -> AuthDependencies:
@@ -255,17 +297,3 @@ def create_auth_dependencies(auth_service: AuthService, user_service: UserServic
         An initialized AuthDependencies instance
     """
     return AuthDependencies(auth_service, user_service)
-
-
-# Hinweis:
-# Die früher hier definierten globalen Type-Aliases
-#   CurrentUser, CurrentActiveUser, CurrentSuperuser
-# sowie ihre Nachfolger UserServiceDep, CurrentUserDep, CurrentActiveUserDep,
-# CurrentSuperuserDep wurden entfernt: Sie werteten Annotated[User, ...] auf
-# Modul-Ebene aus (mit Lambdas als Platzhalter-Dependency), was zu ungültigen
-# OpenAPI-Parametern (query.self / query.deps) UND, unabhängig davon, zu einem
-# dauerhaft None gebundenen `User` führen konnte, falls dieses Modul vor
-# configure_auth_models() importiert wurde. Router sollten stattdessen
-# explizit Depends(auth_deps.get_current_*...) nutzen, wie es
-# routers/user_router.py bereits tut (lokale Annotated[...]-Aliases pro
-# Router-Instanz, aufgebaut aus den oben stehenden Factory-Funktionen).

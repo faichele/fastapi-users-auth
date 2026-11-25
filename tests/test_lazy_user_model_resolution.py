@@ -17,8 +17,15 @@ import sqlalchemy as sa
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from fastapi_users_auth import configure_auth_models, create_auth_models
+from fastapi_users_auth.dependencies import (
+    AuthProvider,
+    CurrentActiveUserDep,
+    CurrentSuperuserDep,
+    CurrentUserDep,
+)
 from fastapi_users_auth.dependencies.auth_deps import (
     AuthDependencies,
+    UserServiceDep,
     get_current_active_superuser,
 )
 from fastapi_users_auth.models import user_models
@@ -111,3 +118,46 @@ def test_dependency_factory_uses_configured_model_and_enforces_access():
     assert client.get("/protected", headers=headers).status_code == 403
     user.is_active = False
     assert client.get("/protected", headers=headers).status_code == 400
+
+
+def test_public_dependency_aliases_use_initialized_provider(monkeypatch):
+    models = configure_auth_models(declarative_base(), table_prefix="aliases_")
+    user = models.User(is_active=True, is_superuser=True)
+    token = str(uuid4())
+    auth_service = SimpleNamespace(get_current_user=lambda value: user if value == token else None)
+    user_service = SimpleNamespace()
+    deps = AuthDependencies(auth_service, user_service)
+    monkeypatch.setattr(AuthProvider, "_initialized", False)
+    monkeypatch.setattr(AuthProvider, "_instance", None)
+    app = FastAPI()
+
+    @app.get("/user")
+    def current(current_user: CurrentUserDep):
+        return {"active": current_user.is_active}
+
+    @app.get("/active")
+    def active(current_user: CurrentActiveUserDep):
+        return {"active": current_user.is_active}
+
+    @app.get("/admin")
+    def admin(current_user: CurrentSuperuserDep):
+        return {"admin": current_user.is_superuser}
+
+    @app.get("/service")
+    def service(current_service: UserServiceDep):
+        return {"matches": current_service is user_service}
+
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {token}"}
+    assert client.get("/user", headers=headers).status_code == 500
+    AuthProvider.initialize(deps)
+    assert client.get("/user").status_code == 401
+    assert client.get("/user", headers={"Authorization": f"Bearer {uuid4()}"}).status_code == 401
+    assert client.get("/user", headers=headers).json() == {"active": True}
+    assert client.get("/active", headers=headers).status_code == 200
+    assert client.get("/admin", headers=headers).status_code == 200
+    assert client.get("/service").json() == {"matches": True}
+    user.is_superuser = False
+    assert client.get("/admin", headers=headers).status_code == 403
+    user.is_active = False
+    assert client.get("/active", headers=headers).status_code == 400

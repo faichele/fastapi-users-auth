@@ -1,10 +1,10 @@
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from fastapi_users_auth import configure_auth_models, create_auth_models
 from fastapi_users_auth.models import group_models, user_models
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Session, declarative_base
 
 
 def test_create_auth_models_builds_prefixed_tables_and_caches_per_base_prefix():
@@ -47,7 +47,7 @@ def test_user_id_override_controls_foreign_key_types():
     )
 
     assert string_models.User.__table__.c.id.type.python_type is str
-    assert string_models.UserSession.__table__.c.user_uuid.type.python_type is str
+    assert string_models.UserSession.__table__.c.user_id.type.python_type is str
     assert string_models.UserGroupMembership.__table__.c.user_id.type.python_type is str
 
 
@@ -59,12 +59,36 @@ def test_default_id_columns_compile_as_postgresql_uuid():
         models.UserGroupMembership.__table__.c.id,
         models.UserGroupMembership.__table__.c.user_id,
         models.UserGroupMembership.__table__.c.group_id,
-        models.UserSession.__table__.c.user_uuid,
+        models.UserSession.__table__.c.user_id,
     ]
     for column in columns:
         assert column.type.python_type is UUID
         assert column.type.compile(dialect=postgresql.dialect()) == "UUID"
     assert {"department", "language", "two_fa_enabled"} <= set(models.User.__table__.c.keys())
+
+
+def test_session_user_id_and_user_uuid_share_one_persisted_column():
+    base = declarative_base()
+    models = create_auth_models(base, table_prefix="session_")
+    assert "user_id" in models.UserSession.__table__.c
+    assert "user_uuid" not in models.UserSession.__table__.c
+    engine = sa.create_engine("sqlite://")
+    base.metadata.create_all(engine)
+
+    with Session(engine) as db:
+        user = models.User(id=uuid4(), email="user@example.com", hashed_password="hash")
+        db.add(user)
+        db.flush()
+        db.add_all([
+            models.UserSession(user_id=user.id),
+            models.UserSession(user_uuid=user.id),
+        ])
+        db.commit()
+        sessions = db.query(models.UserSession).filter(models.UserSession.user_uuid == user.id).all()
+        assert len(sessions) == 2
+        assert all(session.user_id == session.user_uuid == user.id for session in sessions)
+        assert all(session.user.id == user.id for session in sessions)
+    engine.dispose()
 
 
 def test_configure_auth_models_rebinds_public_orm_aliases():

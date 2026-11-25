@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, UniqueConstraint, Uuid
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, synonym
 
 @dataclass(frozen=True)
 class AuthORMModels:
@@ -293,7 +293,7 @@ def create_auth_models(
     # -----------------------------------------------------------------------
     # UserSession – anwendungsunabhängiges Session-Modell
     #
-    # FK: user_uuid → users.id (Legacy-Spaltenname, Typ folgt dem User-PK)
+    # FK: user_id → users.id (Typ folgt dem User-PK)
     # login_source: Plain String(16); der Wert wird von der Anwendung gesetzt
     #               (z. B. "backend", "frontend", "unknown").
     # -----------------------------------------------------------------------
@@ -301,12 +301,13 @@ def create_auth_models(
         "__module__": __name__,
         "__tablename__": session_table_name,
         "id": Column(Integer, primary_key=True, index=True, autoincrement=True),
-        "user_uuid": Column(
+        "user_id": Column(
             user_id_fk_type.copy(),
             ForeignKey(f"{user_table_name}.id", ondelete="CASCADE"),
             nullable=False,
             index=True,
         ),
+        "user_uuid": synonym("user_id"),
         "session_id": Column(
             String,
             unique=True,

@@ -82,8 +82,17 @@ users_auth/
 **Migration:** Die generierten User-, Group- und Membership-IDs verwenden
 SQLAlchemy `Uuid` (auf PostgreSQL `UUID`). Bestehende Datenbanken mit
 String-IDs und zugehörigen Fremdschlüsseln müssen im Consumer-Projekt migriert
-werden. `UserSession.user_uuid` ersetzt die bisherige Spalte `user_id`; bereits
-existierende Session-Tabellen benötigen ebenfalls eine Migration.
+werden, einschließlich `user_sessions.user_id`. Der Spaltenname `user_id`
+bleibt erhalten; `UserSession.user_uuid` ist ein zusätzlicher ORM-Alias.
+Session-Tabellen, die bereits eine Spalte `user_uuid` besitzen, müssen in
+`user_id` umbenannt werden.
+
+Die öffentlichen `CurrentUserDep`, `CurrentActiveUserDep` und
+`CurrentSuperuserDep` verwenden nun den konfigurierten `AuthProvider` und
+erzwingen die jeweiligen Authentifizierungsprüfungen. Zuvor waren sie nur
+Platzhalter, die `None` lieferten. `AuthProvider.initialize(...)` muss daher
+vor ihrer Verwendung aufgerufen werden. Gleiches gilt für `UserServiceDep`
+aus `dependencies.auth_deps`.
 
 ### 1. Einfache Integration (empfohlen)
 
